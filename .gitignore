@@ -1,0 +1,40 @@
+# Ignore Python cache
+__pycache__/
+*.pyc
+
+# Virtual environments
+venv/
+**/venv/
+.venv/
+**/.venv/
+zenv/
+
+# Environment files
+.env
+**/.env
+
+# Jupyter notebook checkpoints
+.ipynb_checkpoints
+
+# VSCode or other IDE configs
+.vscode/
+.idea/
+
+# OS metadata
+.DS_Store
+Thumbs.db
+
+# data artifacts
+*.sqlite
+*.log
+
+# Vector stores
+chromadb/
+**/chromadb/
+**/chroma_db/
+
+# Chainlit
+.chainlit/
+
+# Misc
+*.bak
