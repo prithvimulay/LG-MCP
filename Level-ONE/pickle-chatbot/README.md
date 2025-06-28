@@ -6,7 +6,7 @@
   - Tavily
   - Pickleball PDF
   - Pickleball YouTube
-- Powered by Groq LLM (`qwen2-72b-chat`)
+- Powered by Groq LLM (`qwen-qwq-32b`)
 
 ## Running
 

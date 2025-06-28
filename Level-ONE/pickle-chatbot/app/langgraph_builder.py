@@ -22,24 +22,44 @@ class State(TypedDict):
 
 def tool_calling_llm(state: State):
     user_message = state["messages"][-1]
-
     memory.chat_memory.add_user_message(user_message)
 
     conversation_history = memory.load_memory_variables({})["history"]
-
     llm_response = llm.invoke(conversation_history)
-    
     memory.chat_memory.add_ai_message(llm_response)
 
     return {"messages": [llm_response]}
 
-llm = ChatGroq(model="qwen2-72b-chat").bind_tools(tools=tools)
+# summarizer node to rephrase tool output
+def summarizer_llm(state: State):
+    tool_output = state["messages"][-1]
+
+    if hasattr(tool_output, "tool_call"):
+        tool_name = tool_output.tool_call.get("name", "unknown_tool")
+        tool_args = tool_output.tool_call.get("arguments", {})
+        summary_prompt = (
+            f"A tool was invoked with:\n"
+            f"Tool: {tool_name}\nArguments: {tool_args}\n"
+            f"Summarize for the user."
+        )
+        summary = llm.invoke(summary_prompt)
+    else:
+        safe_text = getattr(tool_output, "content", "")
+        if not safe_text or not isinstance(safe_text, str):
+            safe_text = "No readable content."
+        summary = llm.invoke(safe_text)
+
+    return {"messages": [summary.content]}
+
+llm = ChatGroq(model="qwen-qwq-32b").bind_tools(tools=tools)
 
 def build_graph():
     builder = StateGraph(State)
     builder.add_node("tool_calling_llm", tool_calling_llm)
     builder.add_node("tools", ToolNode(tools))
+    builder.add_node("summarizer_llm", summarizer_llm)
     builder.add_edge(START, "tool_calling_llm")
     builder.add_conditional_edges("tool_calling_llm", tools_condition)
-    builder.add_edge("tools", "tool_calling_llm")
+    builder.add_edge("tools", "summarizer_llm")
+    builder.add_edge("summarizer_llm", "tool_calling_llm")
     return builder.compile()
