@@ -30,12 +30,3 @@ async def handle_message(message: cl.Message):
         if m.type == "ai":
             await cl.Message(m.content).send()
 
-    await cl.Message(
-        content=f"**tool**: pdf_tool\n**source**: Pickleball-Rulebook.pdf",
-        author="🔎 Source",
-        actions=[{
-            "name": "source-details",
-            "label": "See details",
-            "type": "dropdown"
-        }]
-    ).send()
