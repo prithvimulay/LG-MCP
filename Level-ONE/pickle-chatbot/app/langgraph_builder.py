@@ -11,9 +11,9 @@ from langchain.memory import ConversationBufferMemory
 from tools.wiki_tool import wiki_tool
 from tools.tavily_tool import tavily_tool
 from tools.pdf_tool import pdf_tool
-from tools.youtube_tool import youtube_tool
+from tools.youtube_tool import pickleball_youtube
 
-tools = [wiki_tool, tavily_tool, pdf_tool, youtube_tool]
+tools = [wiki_tool, tavily_tool, pdf_tool, pickleball_youtube]
 
 memory = ConversationBufferMemory(return_messages=True)
 
