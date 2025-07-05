@@ -1,0 +1,16 @@
+fastapi
+uvicorn
+python-multipart
+langchain
+langchain-openai
+langchain-chroma
+langchain-groq
+langchain-mcp-adapters
+langgraph
+langsmith
+chromadb
+
+python-dotenv
+pymongo
+pypdf2
+sentence-transformers
