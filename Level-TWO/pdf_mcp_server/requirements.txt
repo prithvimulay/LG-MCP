@@ -1,0 +1,22 @@
+# MCP Framework
+mcp[cli]
+fastmcp
+
+# Vector Database and Embeddings
+chromadb
+sentence-transformers
+
+# Document Database
+pymongo
+
+# PDF Processing
+pypdf2
+langchain-text-splitters
+
+# Data Models and Settings
+pydantic
+pydantic-settings
+
+# Utilities
+python-dotenv
+pathlib

@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "pdf-mcp-server": {
+      "command": "python",
+      "args": [
+        "C:\\Dev\\Projects\\LG-MCP\\Level-TWO\\pdf_mcp_server\\run_server.py"
+      ],
+      "env": {
+        "PYTHONPATH": "C:\\Dev\\Projects\\LG-MCP\\Level-TWO\\pdf_mcp_server\\src"
+      }
+    }
+  }
+}
