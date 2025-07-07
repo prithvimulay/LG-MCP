@@ -20,3 +20,13 @@ pydantic-settings
 # Utilities
 python-dotenv
 pathlib
+
+# LangChain and LLM
+langchain
+langchain-groq
+langchain-community
+
+# Audio Generation
+pyttsx3
+gTTS
+pydub
