@@ -15,6 +15,22 @@ class Settings(BaseSettings):
     max_results: int = 5
 
     mcp_server_name: str = "pdf-mcp-server"
+    
+    # LLM Configuration
+    groq_api_key: str = ""  
+    llm_model: str = "qwen-qwq-32b"
+    llm_temperature: float = 0.7
+    llm_max_tokens: int = 4096
+    
+    # Podcast Configuration
+    podcast_storage_path: Path = Path("./data/podcasts")
+    podcast_max_duration: int = 30  # minutes
+    podcast_chunk_limit: int = 10  # max chunks to process per podcast
+    
+    # Audio Configuration
+    audio_language: str = "en"
+    audio_speed: float = 1.0
+    audio_format: str = "mp3"
 
     class Config:
         env_file = ".env"
