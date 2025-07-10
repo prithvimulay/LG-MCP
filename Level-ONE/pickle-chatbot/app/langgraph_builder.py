@@ -20,19 +20,23 @@ memory = ConversationBufferMemory(return_messages=True)
 class State(TypedDict):
     messages: Annotated[list[AnyMessage], add_messages]
 
+llm = ChatGroq(model="qwen-qwq-32b").bind_tools(tools=tools)
+
 def tool_calling_llm(state: State):
     user_message = state["messages"][-1]
+    print(f"\n[User Message]: {user_message.content}")
     memory.chat_memory.add_user_message(user_message)
 
     conversation_history = memory.load_memory_variables({})["history"]
     llm_response = llm.invoke(conversation_history)
     memory.chat_memory.add_ai_message(llm_response)
 
+    print(f"[LLM Response]: {llm_response.content}")
     return {"messages": [llm_response]}
 
-# summarizer node to rephrase tool output
 def summarizer_llm(state: State):
     tool_output = state["messages"][-1]
+    print(f"\n[Tool Output Received]: {tool_output}")
 
     if hasattr(tool_output, "tool_call"):
         tool_name = tool_output.tool_call.get("name", "unknown_tool")
@@ -49,9 +53,8 @@ def summarizer_llm(state: State):
             safe_text = "No readable content."
         summary = llm.invoke(safe_text)
 
+    print(f"[Summarized Output for User]: {summary.content}")
     return {"messages": [summary.content]}
-
-llm = ChatGroq(model="qwen-qwq-32b").bind_tools(tools=tools)
 
 def build_graph():
     builder = StateGraph(State)
