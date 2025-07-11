@@ -2,6 +2,10 @@
 mcp[cli]
 fastmcp
 
+# LangGraph and Adapters
+langgraph
+langchain-mcp-adapters
+
 # Vector Database and Embeddings
 chromadb
 sentence-transformers
@@ -19,12 +23,10 @@ pydantic-settings
 
 # Utilities
 python-dotenv
-pathlib
 
 # LangChain and LLM
 langchain
 langchain-groq
-langchain-community
 
 # Audio Generation
 pyttsx3
