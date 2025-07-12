@@ -1,18 +1,16 @@
-import PyPDF2 as pypdf
+import pypdf
 from pathlib import Path
-from typing import List, Dict, Any
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+from typing import List, Union
 from ..config.settings import settings
 
 class PDFProcessor:
     def __init__(self):
-        self.text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=settings.chunk_size,
-            chunk_overlap=settings.chunk_overlap
-        )
+        self.chunk_size = settings.chunk_size
+        self.chunk_overlap = settings.chunk_overlap
 
-    def extract_text(self, pdf_path: Path) -> str:
+    def extract_text(self, pdf_path: Union[str, Path]) -> str:
         """Extract text from PDF file"""
+        pdf_path = Path(pdf_path)
         with open(pdf_path, 'rb') as file:
             pdf_reader = pypdf.PdfReader(file)
             text = ""
@@ -20,24 +18,21 @@ class PDFProcessor:
                 text += page.extract_text() + "\n"
         return text
 
-    def chunk_text(self, text: str, pdf_id: str) -> List[Dict[str, Any]]:
-        """Split text into chunks with metadata"""
-        chunks = self.text_splitter.split_text(text)
+    def create_chunks(self, text: str) -> List[str]:
+        """Split text into chunks"""
+        chunks = []
+        text_length = len(text)
+        
+        for i in range(0, text_length, self.chunk_size - self.chunk_overlap):
+            chunk = text[i:i + self.chunk_size]
+            if chunk.strip():  # Only add non-empty chunks
+                chunks.append(chunk)
+        
+        return chunks
 
-        chunk_docs = []
-        for i, chunk in enumerate(chunks):
-            chunk_docs.append({
-                "content": chunk,
-                "metadata": {
-                    "pdf_id": pdf_id,
-                    "chunk_index": i,
-                    "source": pdf_id
-                }
-            })
-        return chunk_docs
-
-    def get_pdf_info(self, pdf_path: Path) -> Dict[str, Any]:
+    def get_pdf_info(self, pdf_path: Union[str, Path]) -> dict:
         """Get basic PDF information"""
+        pdf_path = Path(pdf_path)
         with open(pdf_path, 'rb') as file:
             pdf_reader = pypdf.PdfReader(file)
             return {

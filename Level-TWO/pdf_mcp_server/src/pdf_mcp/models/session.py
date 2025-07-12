@@ -7,6 +7,12 @@ from typing import List, Optional
 from datetime import datetime
 from uuid import uuid4
 
+class ConversationState(BaseModel):
+    """State model for LangGraph conversation flow"""
+    query: str
+    pdf_path: Optional[str] = None
+    response: Optional[str] = None
+
 
 class UserSession(BaseModel):
     """Simple user session for maintaining state"""

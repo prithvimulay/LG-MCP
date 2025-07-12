@@ -1,21 +1,18 @@
 # MCP Framework
-mcp[cli]
-fastmcp
+mcp
 
 # LangGraph and Adapters
 langgraph
 langchain-mcp-adapters
+langchain-core
+langchain-openai
 
 # Vector Database and Embeddings
 chromadb
 sentence-transformers
 
-# Document Database
-pymongo
-
 # PDF Processing
-pypdf2
-langchain-text-splitters
+pypdf
 
 # Data Models and Settings
 pydantic
@@ -23,12 +20,3 @@ pydantic-settings
 
 # Utilities
 python-dotenv
-
-# LangChain and LLM
-langchain
-langchain-groq
-
-# Audio Generation
-pyttsx3
-gTTS
-pydub
