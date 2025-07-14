@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     audio_language: str = "en"
     audio_speed: float = 1.0
     audio_format: str = "mp3"
+    
+    # API Keys
+    groq_api_key: str = ""
+    openai_api_key: str = ""
 
     class Config:
         env_file = ".env"
