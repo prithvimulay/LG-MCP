@@ -27,3 +27,33 @@ def register_tools(server):
     @server.tool
     def list_pdfs_tool() -> str:
         return list_pdfs()
+        
+    @server.tool
+    def db_status_tool() -> str:
+        """Show the current status of the vector database"""
+        from pdf_mcp.vector.store import VectorStore
+        vector_store = VectorStore()
+        count = vector_store.collection.count()
+        
+        if count == 0:
+            return "Vector database is empty. No PDFs have been indexed yet."
+            
+        # Get all items to analyze
+        items = vector_store.collection.get()
+        
+        # Count documents by source PDF
+        pdf_counts = {}
+        if items and 'metadatas' in items and items['metadatas']:
+            for metadata in items['metadatas']:
+                if metadata and 'source' in metadata:
+                    source = metadata['source']
+                    pdf_counts[source] = pdf_counts.get(source, 0) + 1
+        
+        # Build status message
+        status = f"Vector database contains {count} total chunks.\n\n"
+        status += "Indexed PDFs:\n"
+        
+        for pdf, chunk_count in pdf_counts.items():
+            status += f"- {pdf}: {chunk_count} chunks\n"
+            
+        return status

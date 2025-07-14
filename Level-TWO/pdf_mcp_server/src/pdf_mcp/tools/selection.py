@@ -9,4 +9,4 @@ def select_relevant_pdf(query: str) -> str:
         return "No PDFs found."
 
     scored = sorted(pdfs, key=lambda f: sum(word in f.name.lower() for word in query.split()), reverse=True)
-    return str(scored[0])  # return path
+    return scored[0].name
