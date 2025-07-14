@@ -3,12 +3,12 @@ from pathlib import Path
 
 processor = PDFProcessor()
 
-def generate_podcast(pdf_path: str) -> str:
-    path = Path(pdf_path)
+def generate_podcast(query: str, pdf_filename: str) -> str:
+    path = Path(pdf_filename)
     if not path.exists():
-        return f"PDF not found: {pdf_path}"
+        return f"PDF not found: {pdf_filename}"
     
-    text = processor.extract_text(pdf_path)
-    intro = "Welcome to this AI-powered podcast.\n"
-    body = "\n".join([f"A: {line.strip()}\nB: Interesting!" for line in text.splitlines()[:5]])
+    text = processor.extract_text(pdf_filename)
+    intro = f"Welcome to this AI-powered podcast about '{query}'.\n"
+    body = "\n".join([f"A: {line.strip()}\nB: Interesting point about {query}!" for line in text.splitlines()[:5]])
     return f"{intro}{body}"

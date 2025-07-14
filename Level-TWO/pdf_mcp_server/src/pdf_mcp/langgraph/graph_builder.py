@@ -1,7 +1,7 @@
-from typing import TypedDict, Annotated
-from langgraph.graph import StateGraph, START
+from typing import TypedDict, Annotated, Optional
+from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
-from langchain_core.messages import AnyMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AnyMessage, HumanMessage, SystemMessage, AIMessage
 from langchain_core.runnables import RunnableLambda
 from langchain_core.agents import AgentFinish
 from langchain_openai import ChatOpenAI 
@@ -12,62 +12,84 @@ class State(TypedDict):
     query: str
     messages: Annotated[list[AnyMessage], add_messages]
     agent_output: AnyMessage
+    final_output: Optional[str]
     done: bool
 
 llm = ChatOpenAI(model="gpt-4", temperature=0.2)  
 
 # Set up MCP tool execution
-mcp_url = "http://localhost:8000"
+mcp_url = "http://localhost:5001"  # Updated to correct port
 tool_executor = MCPToolExecutor.from_url(mcp_url)
-agent = ToolCallingAgent.from_executor(tool_executor, llm=llm)
 
-# LLM Orchestration Node
-def llm_node(state: State):
-    messages = [
-        SystemMessage(content="You are a smart assistant. Plan the best action or tool."),
-        HumanMessage(content=state["query"])
-    ]
-    response = llm.invoke(messages)
-    return {
-        "messages": messages + [response],
-        "agent_output": response,
-        "done": False
-    }
+# Create agent with detailed instructions
+system_prompt = """
+You are a specialized assistant with access to PDF documents. Your task is to answer queries ONLY using information from these documents and not from your general knowledge.
 
-# Agent Tool Planner 
-def tool_calling_llm(state: State):
-    messages = state.get("messages") or [HumanMessage(content=state["query"])]
+For ALL queries, ALWAYS follow this exact process:
+
+1. FIRST use select_relevant_pdf_tool to find the most relevant PDF for the query
+2. THEN use retrieve_from_pdf_tool with the selected PDF name to get specific information
+3. ONLY use the retrieved information to answer the query
+
+IMPORTANT: Do NOT provide answers based on your general knowledge. If you cannot find relevant information in the PDFs, explain that you couldn't find information about the topic in the available documents.
+
+Available tools:
+- select_relevant_pdf_tool: Returns the most relevant PDF filename based on the query
+- retrieve_from_pdf_tool: Gets information from a PDF (requires pdf_filename and query parameters)
+- list_pdfs_tool: Lists all available PDFs
+- db_status_tool: Shows the status of the PDF database
+
+Your response should be well-structured and directly address the user's query based ONLY on the information retrieved from PDFs.
+"""
+
+agent = ToolCallingAgent.from_executor(
+    tool_executor, 
+    llm=llm,
+    system_message=system_prompt
+)
+
+# Agent Tool Planning and Execution Node 
+def agent_node(state: State):
+    # Initialize messages if this is the first step
+    if "messages" not in state or not state["messages"]:
+        messages = [
+            HumanMessage(content=state["query"])
+        ]
+    else:
+        messages = state["messages"]
+    
+    # Invoke agent with messages
     result = agent.invoke({"messages": messages})
+    
+    # Check if the agent is finished
+    is_done = isinstance(result, AgentFinish)
+    
+    # If agent is done, extract the final output
+    final_output = None
+    if is_done:
+        final_output = result.content
+    
     return {
         "messages": messages + [result],
         "agent_output": result,
-        "done": isinstance(result, AgentFinish)
-    }
-
-# Tool Execution Node 
-def tool_call_node(state: State):
-    if state["done"]:
-        return state
-    result = tool_executor.invoke_tool(state["agent_output"].tool_calls[0])
-    return {
-        "messages": state["messages"] + [result],
-        "agent_output": result,
-        "done": False
+        "final_output": final_output,
+        "done": is_done
     }
 
 # ───── Build Graph ─────
 def build_graph():
     builder = StateGraph(State)
-    builder.add_node("llm_node", RunnableLambda(llm_node))
-    builder.add_node("tool_calling_llm", RunnableLambda(tool_calling_llm))
-    builder.add_node("tool_call", RunnableLambda(tool_call_node))
-
-    builder.add_edge(START, "llm_node")
-    builder.add_edge("llm_node", "tool_calling_llm")
-    builder.add_edge("tool_calling_llm", "tool_call")
-    builder.add_conditional_edges("tool_call", lambda state:
-        "tool_calling_llm" if not state["done"] else "tool_calling_llm"
+    
+    # Add the agent node that handles tool calling
+    builder.add_node("agent", RunnableLambda(agent_node))
+    
+    # Start with the agent node
+    builder.add_edge(START, "agent")
+    
+    # Create a loop: if not done, go back to agent; if done, finish
+    builder.add_conditional_edges(
+        "agent",
+        lambda state: END if state["done"] else "agent"
     )
-
-    builder.set_finish_point("tool_calling_llm")
+    
     return builder.compile()

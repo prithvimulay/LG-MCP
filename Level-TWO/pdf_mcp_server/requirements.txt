@@ -1,24 +1,20 @@
-# MCP Framework
 mcp
 
-# LangGraph and Adapters
 langgraph
 langchain-mcp-adapters
 langchain-core
 langchain-openai
 
-# Vector Database and Embeddings
 chromadb
 sentence-transformers
 numpy
 scikit-learn
 
-# PDF Processing
 pypdf
 
-# Data Models and Settings
 pydantic
 pydantic-settings
 
-# Utilities
 python-dotenv
+
+chainlit
