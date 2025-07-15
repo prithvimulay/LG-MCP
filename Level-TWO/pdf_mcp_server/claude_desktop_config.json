@@ -8,7 +8,7 @@
         "C:\\Dev\\Projects\\LG-MCP\\Level-TWO\\pdf_mcp_server",
         "python",
         "-m",
-        "src.pdf_mcp.server"
+        "src.pdf_mcp.mcp.server"
       ]
     }
   }

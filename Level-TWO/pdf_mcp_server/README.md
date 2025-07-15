@@ -11,16 +11,16 @@ A LangGraph + MCP adapter-based system for querying local PDFs and generating po
 - **Agent-based Routing**: LangGraph agent automatically selects the right tool based on user queries
 
 # Ask questions about PDFs
-uv run python src/pdf_mcp/run_graph.py "What is this PDF about?"
+uv run python -m pdf_mcp.langgraph.graph_runner "What is this PDF about?"
 
 # Generate podcast scripts
-uv run python src/pdf_mcp/run_graph.py "Generate a podcast about this PDF"
+uv run python -m pdf_mcp.langgraph.graph_runner "Generate a podcast about this PDF"
 
 # List available PDFs
-uv run python src/pdf_mcp/run_graph.py "List all PDFs"
+uv run python -m pdf_mcp.langgraph.graph_runner "List all PDFs"
 
 # Select relevant PDF
-uv run python src/pdf_mcp/run_graph.py "Select PDF about artificial intelligence"
+uv run python -m pdf_mcp.langgraph.graph_runner "Select PDF about artificial intelligence"
 ```
 
 ```
@@ -54,8 +54,32 @@ pdf_mcp_server > uv venv
 pdf_mcp_server > .venv\Scripts\activate
 pdf_mcp_server > uv add -r requirements.txt
                  uv sync
-                 uv run python -m pdf_mcp.tools_server
+                 uv run python -m pdf_mcp.mcp.server
+
+
 # terminal 1
 npx @modelcontextprotocol/inspector --server http://localhost:5001    
 # terminal 2
+python client.py http://localhost:5001/mcp/
+# terminal 3
 npx @modelcontextprotocol/inspector uv run python -m pdf_mcp.mcp.server
+
+
+netstat -ano | findstr :5001
+taskkill /PID 22380 /F
+
+
+# 1. Retrieve information from PDF
+tool:retrieve_from_pdf_tool "What is agentic AI?" "agenticAI.pdf"
+
+# 2. List PDFs
+tool:list_pdfs_tool
+
+# 3. Check database status
+tool:db_status_tool
+
+# 4. Select relevant PDF
+tool:select_relevant_pdf_tool "artificial intelligence agents"
+
+# 5. Generate podcast
+tool:generate_podcast_tool "AI concepts" "agenticAI.pdf"

@@ -1,14 +1,42 @@
 from pdf_mcp.pdf.processor import PDFProcessor
+from pdf_mcp.config.settings import settings
 from pathlib import Path
 
 processor = PDFProcessor()
 
 def generate_podcast(query: str, pdf_filename: str) -> str:
-    path = Path(pdf_filename)
-    if not path.exists():
-        return f"PDF not found: {pdf_filename}"
+    # Use the PDF storage path from settings
+    pdf_path = settings.pdf_storage_path / pdf_filename
     
-    text = processor.extract_text(pdf_filename)
-    intro = f"Welcome to this AI-powered podcast about '{query}'.\n"
-    body = "\n".join([f"A: {line.strip()}\nB: Interesting point about {query}!" for line in text.splitlines()[:5]])
-    return f"{intro}{body}"
+    if not pdf_path.exists():
+        return f"PDF not found: {pdf_filename}. Available PDFs are in {settings.pdf_storage_path}"
+    
+    try:
+        text = processor.extract_text(str(pdf_path))
+        
+        # Generate a proper podcast script
+        intro = f"🎙️ Welcome to this AI-powered podcast about '{query}'!\n\n"
+        
+        # Extract meaningful content from the PDF
+        lines = [line.strip() for line in text.splitlines() if line.strip() and len(line.strip()) > 20]
+        
+        # Create a dialogue format
+        dialogue = []
+        dialogue.append(f"Host: Today we're discussing '{query}' based on insights from {pdf_filename}.")
+        dialogue.append(f"Expert: That's right! Let me share some key points from this document.")
+        
+        # Add content from the PDF
+        for i, line in enumerate(lines[:10]):  # Limit to first 10 meaningful lines
+            if i % 2 == 0:
+                dialogue.append(f"Expert: {line[:200]}...")
+            else:
+                dialogue.append(f"Host: That's fascinating! Can you elaborate on that?")
+        
+        dialogue.append(f"Host: Thank you for this insightful discussion about '{query}'!")
+        dialogue.append(f"Expert: My pleasure! This topic from {pdf_filename} really highlights important concepts.")
+        
+        podcast_script = intro + "\n\n".join(dialogue)
+        return podcast_script
+        
+    except Exception as e:
+        return f"Error generating podcast: {str(e)}"
