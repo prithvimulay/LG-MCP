@@ -1,5 +1,6 @@
 import logging
 from typing import Dict, Any
+from pdf_mcp.langgraph.graph_builder import build_graph
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -15,8 +16,6 @@ def run_pipeline(query: str) -> str:
     Returns:
         Formatted response from either tool execution or prompt execution
     """
-from pdf_mcp.langgraph.graph_builder import build_graph
-    
     # Log query
     logger.info(f"Processing query: {query}")
     

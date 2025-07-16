@@ -54,13 +54,13 @@ pdf_mcp_server > uv venv
 pdf_mcp_server > .venv\Scripts\activate
 pdf_mcp_server > uv add -r requirements.txt
                  uv sync
-                 uv run python -m pdf_mcp.mcp.server
+                 
 
 
 # terminal 1
-npx @modelcontextprotocol/inspector --server http://localhost:5001    
+uv run python -m pdf_mcp.mcp.server
 # terminal 2
-python client.py http://localhost:5001/mcp/
+python lg_server_client.py http://localhost:5001/mcp/ 
 # terminal 3
 npx @modelcontextprotocol/inspector uv run python -m pdf_mcp.mcp.server
 

@@ -3,14 +3,18 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 from langchain_core.messages import AnyMessage, HumanMessage, SystemMessage, AIMessage
 from langchain_core.runnables import RunnableLambda
-from langchain_openai import ChatOpenAI 
-from langchain_mcp_adapters.tool_agent import ToolCallingAgent
-from langchain_mcp_adapters.tool_executor import MCPToolExecutor
+from langchain_openai import ChatOpenAI
+from langchain.agents import AgentExecutor, create_openai_tools_agent
+from langchain_core.tools import tool
+# Not using async load_mcp_tools
+# from langchain_mcp_adapters.tools import load_mcp_tools
+from pdf_mcp.mcp.tools_impl import TOOLS  # Use our predefined tools
 import logging
 import requests
 import json
 import re
 from pdf_mcp.mcp.prompts_impl import PROMPTS
+from pdf_mcp.config.settings import settings
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -26,9 +30,44 @@ class State(TypedDict):
     prompt_args: Optional[Dict[str, Any]]
 
 # Setup
-llm = ChatOpenAI(model="gpt-4", temperature=0.2)
+llm = ChatOpenAI(
+    model="gpt-4", 
+    temperature=0.2,
+    openai_api_key=settings.openai_api_key
+)
 mcp_url = "http://localhost:5001"
-tool_executor = MCPToolExecutor.from_url(mcp_url)
+
+# Create langchain tools from our MCP tools
+from langchain_core.tools import Tool as LangchainTool
+
+langchain_tools = []
+for tool in TOOLS:
+    langchain_tools.append(
+        LangchainTool(
+            name=tool.name,
+            description=tool.description,
+            func=lambda **kwargs: f"Simulated response for {kwargs}",  # Placeholder implementation
+        )
+    )
+
+# Create agent
+from langchain.agents.format_scratchpad import format_to_openai_function_messages
+from langchain.agents.output_parsers import OpenAIFunctionsAgentOutputParser
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "You are a helpful assistant that can analyze PDFs."),
+    ("human", "{input}"),
+    MessagesPlaceholder(variable_name="agent_scratchpad"),
+])
+
+agent = {
+    "input": lambda x: x["input"],
+    "agent_scratchpad": lambda x: format_to_openai_function_messages(x["intermediate_steps"])
+} | prompt | llm | OpenAIFunctionsAgentOutputParser()
+
+agent_executor = AgentExecutor(agent=agent, tools=langchain_tools, verbose=True)
+
 # Function to fetch prompt results via MCP API
 def fetch_prompt(prompt_name: str, args: Dict[str, Any]) -> str:
     """Fetch prompt result from MCP API"""
@@ -46,8 +85,7 @@ def fetch_prompt(prompt_name: str, args: Dict[str, Any]) -> str:
     except Exception as e:
         return f"Error calling prompt: {str(e)}"
 
-prompt_executor = ToolCallingAgent.from_executor(tool_executor, llm=llm)
-agent = ToolCallingAgent.from_executor(tool_executor, llm=llm)
+# No longer needed with the new agent setup above
 
 # Decision node - determines whether to use tool or prompt
 def decision_node(state: State) -> Dict:
@@ -125,12 +163,18 @@ def tool_branch(state: State) -> Dict:
     messages = state["messages"]
     
     # Use LangChain agent for tool calling
-    result = agent.invoke({"messages": messages})
+    try:
+        result = agent_executor.invoke({"input": state["query"], "chat_history": messages})
+    except Exception as e:
+        # Log error and return a fallback response
+        logger.error(f"Error in tool execution: {str(e)}")
+        result = {"output": f"I encountered an error while processing your request: {str(e)}"}
+    result_content = result.get("output", "No response generated.")
     
     return {
         "query": state["query"],
-        "messages": state["messages"] + [result],
-        "final_output": result.content,
+        "messages": state["messages"] + [AIMessage(content=result_content)],
+        "final_output": result_content,
         "branch": state["branch"],
         "prompt_name": state["prompt_name"],
         "prompt_args": state["prompt_args"]

@@ -66,10 +66,16 @@ PROMPTS = {
 def register_prompts(server: FastMCP):
     """Register all prompts with the MCP server"""
     
-    @server.list_prompts()
-    async def list_prompts() -> list[types.Prompt]:
-        """Return the list of available prompts"""
-        return list(PROMPTS.values())
+    # Register prompts directly with the server
+    for prompt in PROMPTS.values():
+        # Add an ID to the prompt before registering
+        prompt_with_id = types.Prompt(
+            id=f"prompt-{prompt.name}",
+            name=prompt.name,
+            description=prompt.description,
+            arguments=prompt.arguments
+        )
+        server.add_prompt(prompt_with_id)
     
     @server.get_prompt()
     async def get_prompt(

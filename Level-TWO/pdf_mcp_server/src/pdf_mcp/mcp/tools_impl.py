@@ -14,7 +14,7 @@ def list_pdfs() -> str:
 
 # Define available tools using types.Tool
 TOOLS = [
-    types.Tool(
+types.Tool(id="tool-retrieve-from-pdf",
         name="retrieve_from_pdf",
         description="Retrieves specific information from a PDF document based on semantic search.",
         inputSchema={
@@ -26,7 +26,7 @@ TOOLS = [
             "required": ["query", "pdf_filename"]
         }
     ),
-    types.Tool(
+    types.Tool(id="tool-generate-podcast",
         name="generate_podcast",
         description="Generates a podcast-style dialogue based on PDF content.",
         inputSchema={
@@ -38,7 +38,7 @@ TOOLS = [
             "required": ["query", "pdf_filename"]
         }
     ),
-    types.Tool(
+    types.Tool(id="tool-select-relevant-pdf",
         name="select_relevant_pdf",
         description="Identifies the most relevant PDF document based on the query.",
         inputSchema={
@@ -49,7 +49,7 @@ TOOLS = [
             "required": ["query"]
         }
     ),
-    types.Tool(
+    types.Tool(id="tool-list-pdfs",
         name="list_pdfs",
         description="Lists all available PDF documents in the system.",
         inputSchema={
@@ -58,7 +58,7 @@ TOOLS = [
             "required": []
         }
     ),
-    types.Tool(
+    types.Tool(id="tool-db-status",
         name="db_status",
         description="Provides detailed status of the vector database indexing.",
         inputSchema={
@@ -72,10 +72,9 @@ TOOLS = [
 def register_tools(server: FastMCP):
     """Register all tools with the MCP server"""
     
-    @server.list_tools()
-    async def list_tools() -> list[types.Tool]:
-        """Return the list of available tools"""
-        return TOOLS
+    # Register tools directly with the server
+    for tool in TOOLS:
+        server.add_tool(tool)
     
     @server.call_tool()
     async def call_tool(
