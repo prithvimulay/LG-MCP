@@ -6,6 +6,9 @@ from pdf_mcp.langgraph.graph_builder import build_graph
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Cache for the graph instance
+_graph_instance = None
+
 def run_pipeline(query: str) -> str:
     """
     Runs the query through the LangGraph pipeline.
@@ -19,8 +22,11 @@ def run_pipeline(query: str) -> str:
     # Log query
     logger.info(f"Processing query: {query}")
     
-    # Build and invoke the graph
-    graph = build_graph()
+    # Lazily build and invoke the graph
+    global _graph_instance
+    if _graph_instance is None:
+        logger.info("Initializing LangGraph pipeline for the first time")
+        _graph_instance = build_graph()
     
     # Prepare initial state
     initial_state = {
@@ -33,7 +39,7 @@ def run_pipeline(query: str) -> str:
     }
     
     # Execute the graph
-    result = graph.invoke(initial_state)
+    result = _graph_instance.invoke(initial_state)
     
     # Extract final output
     final_output = result.get("final_output", "No response generated.")
