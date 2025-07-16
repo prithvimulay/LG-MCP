@@ -33,8 +33,7 @@ async def stream_query(payload: dict):
 
     logging.info(f"Processing query via LangGraph stream: {query}")
     try:
-        # streamable run_pipeline variant
-        from pdf_mcp.langgraph.graph_runner import run_pipeline
+        # Use enhanced graph pipeline with conditional tool/prompt selection
         result = run_pipeline(query)
         yield {"response": result}
     except Exception as e:

@@ -1,95 +1,260 @@
-from typing import TypedDict, Annotated, Optional
+from typing import TypedDict, Annotated, Optional, Dict, Any
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
-from langchain_core.messages import AnyMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AnyMessage, HumanMessage, SystemMessage, AIMessage
 from langchain_core.runnables import RunnableLambda
-from langchain_core.agents import AgentFinish
 from langchain_openai import ChatOpenAI 
 from langchain_mcp_adapters.tool_agent import ToolCallingAgent
 from langchain_mcp_adapters.tool_executor import MCPToolExecutor
+import logging
+import requests
+import json
+import re
+from pdf_mcp.mcp.prompts_impl import PROMPTS
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 class State(TypedDict):
+    """Simple state for the workflow."""
     query: str
     messages: Annotated[list[AnyMessage], add_messages]
-    agent_output: AnyMessage
     final_output: Optional[str]
-    done: bool
+    branch: str  # Either 'tool' or 'prompt'
+    prompt_name: Optional[str]
+    prompt_args: Optional[Dict[str, Any]]
 
-# Setup 
+# Setup
 llm = ChatOpenAI(model="gpt-4", temperature=0.2)
 mcp_url = "http://localhost:5001"
 tool_executor = MCPToolExecutor.from_url(mcp_url)
+# Function to fetch prompt results via MCP API
+def fetch_prompt(prompt_name: str, args: Dict[str, Any]) -> str:
+    """Fetch prompt result from MCP API"""
+    try:
+        # Call MCP prompt endpoint
+        response = requests.post(
+            f"{mcp_url}/prompt/{prompt_name}",
+            json=args
+        )
+        
+        if response.status_code == 200:
+            return response.json().get("response", "No response from prompt.")
+        else:
+            return f"Error from prompt endpoint: {response.status_code}"
+    except Exception as e:
+        return f"Error calling prompt: {str(e)}"
+
+prompt_executor = ToolCallingAgent.from_executor(tool_executor, llm=llm)
 agent = ToolCallingAgent.from_executor(tool_executor, llm=llm)
 
-# Initial LLM Planning 
-def llm_node(state: State):
+# Decision node - determines whether to use tool or prompt
+def decision_node(state: State) -> Dict:
+    """Decides whether to use a tool or prompt based on the query."""
+    query = state["query"]
+    
+    # Create a description of available prompts
+    prompts_info = ""
+    for name, prompt in PROMPTS.items():
+        args = ", ".join([arg.name for arg in prompt.arguments if arg.required])
+        optional_args = ", ".join([arg.name for arg in prompt.arguments if not arg.required])
+        prompt_desc = f"- {name}: {prompt.description}\n  Required args: {args}"
+        if optional_args:
+            prompt_desc += f"\n  Optional args: {optional_args}"
+        prompts_info += prompt_desc + "\n"
+    
+    # Simple system message that relies on built-in prompt/tool descriptions
+    system_message = f"""You are a PDF assistant that can either use tools or pre-built prompts.
+Based on the user's query, decide which approach would be more effective.
+
+AVAILABLE PROMPTS:
+{prompts_info}
+
+Prompts are ideal for standard operations like PDF summarization, key point extraction,
+document structure analysis, or podcast script generation.
+
+Tools are better for custom retrieval, list operations, database status checks, or
+when you need more flexibility.
+
+Respond with JSON: {"branch": "tool"} or {"branch": "prompt", "prompt_name": "name", "prompt_args": {"arg1": "value1", ...}}
+"""
+    
     messages = [
-        SystemMessage(content="""You are an advanced PDF assistant with specialized tools for document analysis and content generation.
-        
-        AVAILABLE TOOLS:
-        - retrieve_from_pdf_tool: Use when you need to extract specific information from a PDF based on a query. Requires exact PDF filename and a clear search query.
-        - generate_podcast_tool: Use when creating audio content or summaries based on PDF content. Requires PDF filename and podcast topic.
-        - select_relevant_pdf_tool: Use when the user hasn't specified which PDF to use. This will find the most relevant PDF based on the query.
-        - list_pdfs_tool: Use when you need to see all available PDFs in the system or when the user asks what documents are available.
-        - db_status_tool: Use to check the vector database status, including which PDFs are indexed and their chunk counts.
-        
-        TOOL SELECTION GUIDELINES:
-        1. Always check if PDFs exist first using list_pdfs_tool when a request mentions PDFs but doesn't specify a filename.
-        2. Use select_relevant_pdf_tool when the user query relates to content but doesn't specify which PDF to use.
-        3. For information extraction, use retrieve_from_pdf_tool with specific questions about PDF content.
-        4. For content generation or summarization tasks, use generate_podcast_tool.
-        5. Check database status with db_status_tool if you need to verify which PDFs are indexed.
-        
-        Carefully analyze the user's request to determine the most appropriate tool and required parameters."""),
-        HumanMessage(content=state["query"])
+        SystemMessage(content=system_message),
+        HumanMessage(content=query)
     ]
+    
+    # Get LLM decision
     response = llm.invoke(messages)
+    
+    # Extract decision from response
+    branch = "tool"  # Default to tool
+    prompt_name = None
+    prompt_args = {}
+    
+    try:
+        # Look for JSON in the response
+        json_match = re.search(r'\{.*?"branch".*?\}', response.content, re.DOTALL)
+        if json_match:
+            decision = json.loads(json_match.group(0))
+            branch = decision.get("branch", "tool")
+            prompt_name = decision.get("prompt_name")
+            prompt_args = decision.get("prompt_args", {})
+    except Exception as e:
+        logger.error(f"Error parsing decision: {str(e)}")
+    
+    # Add explanation message
+    if branch == "prompt" and prompt_name:
+        explanation = f"I'll use the {prompt_name} prompt to process your request."
+    else:
+        explanation = "I'll use specialized tools to process your request."
+    
     return {
-        "messages": messages + [response],
-        "agent_output": response,
+        "query": query,
+        "messages": state["messages"] + [AIMessage(content=explanation)],
         "final_output": None,
-        "done": False
+        "branch": branch,
+        "prompt_name": prompt_name,
+        "prompt_args": prompt_args
     }
 
-# Agent Tool Planner 
-def tool_calling_llm(state: State):
-    messages = state.get("messages") or [HumanMessage(content=state["query"])]
+# Tool branch - handles tool selection and execution
+def tool_branch(state: State) -> Dict:
+    """Uses tools to process the query."""
+    messages = state["messages"]
+    
+    # Use LangChain agent for tool calling
     result = agent.invoke({"messages": messages})
-    is_done = isinstance(result, AgentFinish)
+    
     return {
-        "messages": messages + [result],
-        "agent_output": result,
-        "final_output": result.content if is_done else None,
-        "done": is_done
-    }
-
-# Tool Executor 
-def tool_call_node(state: State):
-    if state["done"]:
-        return state
-    result = tool_executor.invoke_tool(state["agent_output"].tool_calls[0])
-    return {
+        "query": state["query"],
         "messages": state["messages"] + [result],
-        "agent_output": result,
-        "final_output": None,
-        "done": False
+        "final_output": result.content,
+        "branch": state["branch"],
+        "prompt_name": state["prompt_name"],
+        "prompt_args": state["prompt_args"]
     }
 
-# Graph Builder 
+# Prompt branch - calls MCP prompt
+def prompt_branch(state: State) -> Dict:
+    """Calls the appropriate MCP prompt with arguments."""
+    prompt_name = state["prompt_name"]
+    prompt_args = state["prompt_args"]
+    
+    if not prompt_name:
+        return {
+            "query": state["query"],
+            "messages": state["messages"] + [AIMessage(content="Error: No prompt selected.")],
+            "final_output": "Error: No prompt selected.",
+            "branch": state["branch"],
+            "prompt_name": None,
+            "prompt_args": None
+        }
+    
+    try:
+        # Call MCP prompt endpoint
+        response = requests.post(
+            f"{mcp_url}/prompt/{prompt_name}",
+            json=prompt_args
+        )
+        
+        if response.status_code == 200:
+            result = response.json().get("response", "No response from prompt.")
+            return {
+                "query": state["query"],
+                "messages": state["messages"] + [AIMessage(content=result)],
+                "final_output": result,
+                "branch": state["branch"],
+                "prompt_name": prompt_name,
+                "prompt_args": prompt_args
+            }
+        else:
+            error = f"Error from prompt endpoint: {response.status_code}"
+            return {
+                "query": state["query"],
+                "messages": state["messages"] + [AIMessage(content=error)],
+                "final_output": error,
+                "branch": state["branch"],
+                "prompt_name": prompt_name,
+                "prompt_args": prompt_args
+            }
+    except Exception as e:
+        error = f"Error calling prompt: {str(e)}"
+        return {
+            "query": state["query"],
+            "messages": state["messages"] + [AIMessage(content=error)],
+            "final_output": error,
+            "branch": state["branch"],
+            "prompt_name": prompt_name,
+            "prompt_args": prompt_args
+        }
+
+# Response formatting node
+def response_formatter(state: State) -> Dict:
+    """Uses LLM to format the final output for presentation."""
+    # Get raw output from previous steps
+    final_output = state["final_output"]
+    query = state["query"]
+    branch = state["branch"]
+    prompt_name = state["prompt_name"]
+    
+    # Create formatting instruction for LLM
+    if branch == "prompt" and prompt_name:
+        format_instruction = f"""You are a helpful assistant tasked with formatting the output from a PDF processing system.  
+The following is the raw output from the '{prompt_name}' prompt in response to this query: "{query}".
+
+Please format this content in a clear, well-structured way. Add appropriate headings, bullet points, or other formatting elements to improve readability. Ensure the content is organized logically and presented in a polished, professional manner.
+
+Raw output to format:
+{final_output}"""
+    else:
+        format_instruction = f"""You are a helpful assistant tasked with formatting the output from a PDF processing system.
+The following is the raw output from tool-based processing in response to this query: "{query}".
+
+Please format this content in a clear, well-structured way. Add appropriate headings, bullet points, or other formatting elements to improve readability. Ensure the content is organized logically and presented in a polished, professional manner.
+
+Raw output to format:
+{final_output}"""
+    
+    # Get formatted response from LLM
+    format_messages = [HumanMessage(content=format_instruction)]
+    formatted_response = llm.invoke(format_messages)
+    
+    return {
+        "query": state["query"],
+        "messages": state["messages"] + [formatted_response],
+        "final_output": formatted_response.content,
+        "branch": state["branch"],
+        "prompt_name": state["prompt_name"],
+        "prompt_args": state["prompt_args"]
+    }
+
+# Build the graph
 def build_graph():
+    """Builds and returns the compiled StateGraph."""
     builder = StateGraph(State)
-    builder.add_node("llm_node", RunnableLambda(llm_node))
-    builder.add_node("tool_calling_llm", RunnableLambda(tool_calling_llm))
-    builder.add_node("tool_call", RunnableLambda(tool_call_node))
-
-    builder.add_edge(START, "llm_node")
-    builder.add_edge("llm_node", "tool_calling_llm")
-    builder.add_edge("tool_calling_llm", "tool_call")
-
-    # Conditional looping based on completion
-    builder.add_conditional_edges("tool_call", lambda state:
-        "tool_calling_llm" if not state["done"] else "tool_calling_llm"
+    
+    # Add nodes
+    builder.add_node("decision", RunnableLambda(decision_node))
+    builder.add_node("tool_branch", RunnableLambda(tool_branch))
+    builder.add_node("prompt_branch", RunnableLambda(prompt_branch))
+    builder.add_node("response_formatter", RunnableLambda(response_formatter))
+    
+    # Add edges
+    builder.add_edge(START, "decision")
+    
+    # Conditional edge based on decision
+    builder.add_conditional_edges(
+        "decision",
+        lambda state: "prompt_branch" if state["branch"] == "prompt" else "tool_branch"
     )
-
-    builder.set_finish_point("tool_calling_llm")
+    
+    # Branches lead to formatter
+    builder.add_edge("tool_branch", "response_formatter")
+    builder.add_edge("prompt_branch", "response_formatter")
+    
+    # End at formatter
+    builder.add_edge("response_formatter", END)
+    
     return builder.compile()

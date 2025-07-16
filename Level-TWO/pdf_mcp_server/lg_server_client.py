@@ -1,5 +1,6 @@
 import sys
 import requests
+import json
 
 class LangGraphServerClient:
     def __init__(self, server_url: str = "http://localhost:5001"):
@@ -32,7 +33,14 @@ class LangGraphServerClient:
                 for line in response.iter_lines():
                     if line:
                         decoded = line.decode("utf-8").replace("data: ", "")
-                        output += decoded + "\n"
+                        try:
+                            data = json.loads(decoded)
+                            if "response" in data:
+                                output = data["response"]
+                            elif "error" in data:
+                                output = f"❌ Error: {data['error']}"
+                        except json.JSONDecodeError:
+                            output += decoded + "\n"
                 return output
         except Exception as e:
             return f"❌ Error streaming query: {str(e)}"
