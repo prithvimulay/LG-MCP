@@ -1,84 +1,42 @@
+import asyncio
 import logging
-from typing import Dict, Any
 from pdf_mcp.langgraph.graph_builder import build_graph
+from pdf_mcp.mcp.mcp_client import get_mcp_client
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Cache for the graph instance
 _graph_instance = None
 
-def run_pipeline(query: str) -> str:
-    """
-    Runs the query through the LangGraph pipeline.
-    
-    Args:
-        query: The user's query string
-        
-    Returns:
-        Formatted response from either tool execution or prompt execution
-    """
-    # Log query
-    logger.info(f"Processing query: {query}")
-    
-    # Lazily build and invoke the graph
+async def run_pipeline_async(query: str) -> str:
+    """Run pipeline async"""
     global _graph_instance
     if _graph_instance is None:
-        logger.info("Initializing LangGraph pipeline for the first time")
+        logger.info("Initializing LangGraph pipeline")
+        
+        # Ensure MCP client is connected
+        client = await get_mcp_client()
+        await client.connect()
+        logger.info("MCP client connected")
+        
         _graph_instance = build_graph()
-    
-    # Prepare initial state
+        logger.info("LangGraph pipeline initialized")
+
     initial_state = {
         "query": query,
         "messages": [],
         "final_output": None,
         "branch": "",
-        "prompt_name": None,
-        "prompt_args": None
+        "tool_name": None,
+        "tool_args": None
     }
-    
-    # Execute the graph
-    result = _graph_instance.invoke(initial_state)
-    
-    # Extract final output
-    final_output = result.get("final_output", "No response generated.")
-    
-    # Log path taken
-    branch = result.get("branch", "unknown")
-    prompt_name = result.get("prompt_name")
-    
-    if branch == "prompt" and prompt_name:
-        logger.info(f"Used prompt: {prompt_name}")
-    else:
-        logger.info("Used tools")
-    
-    return final_output
 
-
-def main():
-    """Command-line entry point for testing."""
-    import sys
-    import time
-    
-    if len(sys.argv) < 2:
-        print("Usage: python -m pdf_mcp.langgraph.graph_runner \"Your query\"")
-        return
-    
-    query = " ".join(sys.argv[1:])
-    print(f"🔍 Query: {query}")
-    
-    start_time = time.time()
-    
     try:
-        result = run_pipeline(query)
-        print(f"\n📝 Result:\n{result}")
+        result = await _graph_instance.ainvoke(initial_state)  # Use ainvoke for async
+        return result.get("final_output", "No response generated")
     except Exception as e:
-        print(f"❌ Error: {str(e)}")
-    
-    duration = time.time() - start_time
-    print(f"\n⏱️ Completed in {duration:.2f}s")
+        logger.error(f"Pipeline error: {e}")
+        return f"Error: {str(e)}"
 
-
-if __name__ == "__main__":
-    main()
+def run_pipeline(query: str) -> str:
+    """Sync wrapper for async pipeline"""
+    return asyncio.run(run_pipeline_async(query))

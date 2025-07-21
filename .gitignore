@@ -1,6 +1,9 @@
 # Ignore Python cache
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+.Python
 
 # Virtual environments
 venv/
@@ -28,13 +31,22 @@ Thumbs.db
 *.sqlite
 *.log
 
-# Vector stores
-chromadb/
-**/chromadb/
-**/chroma_db/
-
 # Chainlit
 .chainlit/
 
 # Misc
 *.bak
+
+# Egg info directory
+*.egg-info/
+*.egg
+build/
+dist/
+
+# ChromaDB files
+chroma.sqlite3
+*.bin
+*.pickle
+
+# Or more specifically for your vector database
+vector_db/
