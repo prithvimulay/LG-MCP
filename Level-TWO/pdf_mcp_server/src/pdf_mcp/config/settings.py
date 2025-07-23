@@ -1,42 +1,48 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import field_validator
+from pydantic import field_validator, Field
 from pathlib import Path
-
+from typing import Optional
 
 class Settings(BaseSettings):
-    pdf_storage_path: Path
-    vector_db_path: Path
-    podcast_storage_path: Path
-
+    """Application settings with validation"""
+    
+    pdf_storage_path: Path = Field(default_factory=lambda: Path("src/data/pdfs"))
+    vector_db_path: Path = Field(default_factory=lambda: Path("src/vector_db"))
+    podcast_storage_path: Path = Field(default_factory=lambda: Path("src/data/podcasts"))
+    
     chunk_size: int = 1000
     chunk_overlap: int = 200
-    mcp_server_name: str = "pdf-mcp-server"
-    podcast_max_duration: int = 30
-    podcast_chunk_limit: int = 10
-    audio_language: str = "en"
-    audio_speed: float = 1.0
-    audio_format: str = "mp3"
-    groq_api_key: str = ""
-    openai_api_key: str = ""
+    
+    groq_api_key: str = Field(default="", description="GROQ API key for LLM")
+    openai_api_key: str = Field(default="", description="OpenAI API key (optional)")
+    
     embedding_model: str = "all-MiniLM-L6-v2"
-
+    llm_model: str = "llama3-70b-8192"
+    llm_temperature: float = 0.2
+    
+    mcp_server_name: str = "pdf-mcp-server"
+    mcp_server_version: str = "2.0.0"
+    
     model_config = SettingsConfigDict(
         extra="ignore",
-        env_file=".env"
+        env_file=".env",
+        env_file_encoding="utf-8"
     )
 
-    @field_validator("pdf_storage_path", "vector_db_path", "podcast_storage_path", mode="before")
+    @field_validator("groq_api_key")
     @classmethod
-    def resolve_path(cls, v: str | Path) -> Path:
-        return Path(v).expanduser().resolve()
+    def validate_groq_api_key(cls, v: str) -> str:
+        if not v or v.strip() == "":
+            raise ValueError("GROQ_API_KEY is required. Set it in .env file or environment variable.")
+        return v.strip()
 
+    @field_validator("pdf_storage_path", "vector_db_path", "podcast_storage_path")
+    @classmethod
+    def validate_and_create_paths(cls, v: Path) -> Path:
+        if isinstance(v, str):
+            v = Path(v)
+        resolved_path = v.expanduser().resolve()
+        resolved_path.mkdir(parents=True, exist_ok=True)
+        return resolved_path
 
-def get_settings() -> Settings:
-    return Settings()
-
-settings = get_settings()
-
-
-if __name__ == "__main__":
-    print("PDF path:", settings.pdf_storage_path)
-    print("Vector DB path:", settings.vector_db_path)
+settings = Settings()

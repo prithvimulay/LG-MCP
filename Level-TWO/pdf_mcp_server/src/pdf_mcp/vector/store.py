@@ -12,17 +12,13 @@ class VectorStore:
 
     def add_chunks(self, chunks: List[str], pdf_filename: str = None):
         """Add text chunks to vector store with PDF source metadata"""
-        # Generate embeddings for all chunks
         embeddings = self.embedding_model.encode(chunks)
         
-        # Create unique IDs for each chunk
         import uuid
         doc_ids = [f"{pdf_filename}_{uuid.uuid4()}" for _ in range(len(chunks))]
         
-        # Create metadata for each chunk to track source PDF
         metadatas = [{"source": pdf_filename} for _ in range(len(chunks))] if pdf_filename else None
         
-        # Add to collection
         self.collection.add(
             documents=chunks,
             embeddings=embeddings,
@@ -41,15 +37,12 @@ class VectorStore:
         Returns:
             List of text chunks most similar to the query
         """
-        # Encode the query
         query_embedding = self.embedding_model.encode([query])[0].tolist()
         
-        # Set up search parameters
         where_filter = None
         if pdf_filename:
             where_filter = {"source": pdf_filename}
             
-        # Perform search against vector DB
         try:
             results = self.collection.query(
                 query_embeddings=[query_embedding],
@@ -57,7 +50,6 @@ class VectorStore:
                 where=where_filter
             )
             
-            # Extract documents from results
             if results and 'documents' in results and len(results['documents']) > 0:
                 chunks = results['documents'][0]
                 if not chunks:

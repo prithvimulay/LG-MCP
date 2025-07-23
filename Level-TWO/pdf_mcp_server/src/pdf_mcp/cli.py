@@ -1,121 +1,211 @@
 import asyncio
 import sys
 import logging
-from pdf_mcp.langgraph.graph_builder import build_graph
-from pdf_mcp.mcp.mcp_client import get_mcp_client
+from pdf_mcp.langgraph.graph_builder import process_pdf_query_mcp, cleanup_pdf_orchestrator
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger("pdf_mcp_cli")
 
-class PDFAssistantCLI:
+class MCPWorkflowCLI:
+    """CLI implementing the complete MCP workflow"""
+    
     def __init__(self):
-        self.graph = None
-        self.mcp_client = None
+        self.session_active = False
+    
+    def print_banner(self):
+        """Print CLI banner"""
+        banner = """
+╔══════════════════════════════════════════════════════════════════════╗
+║                   PDF MCP CLI - LangGraph Workflow                   ║
+╠══════════════════════════════════════════════════════════════════════╣
+║  Commands: 'help' | 'quit'/'exit' | 'clear' | 'status'               ║
+╚══════════════════════════════════════════════════════════════════════╝
+"""
+        print(banner)
+    
+    def show_help(self):
+        """Show help information"""
+        help_text = """
+PDF MCP CLI - Complete Workflow Help
 
-    async def initialize(self) -> bool:
-        """Initialize CLI components"""
-        try:
-            # Initialize MCP client
-            self.mcp_client = await get_mcp_client()
-            health = await self.mcp_client.health_check()
-            
-            if not health:
-                logger.error("MCP server health check failed")
-                return False
-            
-            logger.info("MCP client connected")
-            
-            # Build graph
-            self.graph = build_graph()
-            logger.info("LangGraph initialized")
-            
-            return True
+The MCP Workflow:
+  User Query → CLI → Load Tools from MCP Server → LangGraph Tool Selection → 
+  Call MCP Tool → Obtain Result → Format via LLM → Display in CLI
 
-        except Exception as e:
-            logger.error(f"Initialization failed: {e}")
-            return False
+Available Commands:
+  • help, h, ?          - Show this help
+  • quit, exit, q       - Exit the session  
+  • clear, cls          - Clear screen
+  • status              - Check MCP server status
 
-    async def process_query(self, query: str) -> str:
-        """Process query through LangGraph"""
-        if not self.graph:
-            if not await self.initialize():
-                return " System initialization failed"
+Natural Language Queries:
+  Document Management:
+    • "List all PDFs"
+    • "Show available documents" 
+    • "What PDFs do you have?"
 
-        try:
-            initial_state = {
-                "query": query,
-                "messages": [],
-                "final_output": None,
-                "branch": "",
-                "tool_name": None,
-                "tool_args": None
-            }
+  Content Search:
+    • "Search for attention mechanisms in attention.pdf"
+    • "Find information about AI agents"
+    • "What does the roleAI.pdf say about agents?"
 
-            result = await self.graph.ainvoke(initial_state)
-            return result.get("final_output", "No response generated")
+  Content Generation:
+    • "Generate a podcast about transformers from attention.pdf"
+    • "Create content about AI from agenticAI.pdf"
 
-        except Exception as e:
-            error_msg = f"Error processing query: {str(e)}"
-            logger.error(error_msg)
-            return error_msg
+  Database Operations:
+    • "Show database status"
+    • "How many documents are indexed?"
 
-    async def run_interactive(self):
-        """Run interactive mode"""
-        print("🚀 PDF Assistant CLI (MCP + LangGraph)")
+Example Session:
+  You: list all pdfs
+  AI: [MCP workflow executes: loads tools → selects list_pdfs_tool → calls MCP server → formats result]
+
+Available Documents: agenticAI.pdf, attention.pdf, roleAI.pdf
+"""
+        print(help_text)
+    
+    async def run_interactive_session(self):
+        """Run interactive MCP workflow session"""
+        self.session_active = True
+        self.print_banner()
         
-        if not await self.initialize():
-            print("❌ Failed to initialize system")
-            return
-
-        print("Type your queries or 'quit' to exit\n")
-
-        while True:
-            try:
-                query = input(">>> ").strip()
-                
-                if not query:
-                    continue
+        try:
+            print("Initializing MCP workflow system...")
+            print("   • Connecting to MCP server...")
+            print("   • Loading tools via MCP client...")
+            print("   • Setting up LangGraph orchestration...")
+            print("MCP workflow ready!\n")
+            
+            while self.session_active:
+                try:
+                    # Get user input
+                    user_input = input("You: ").strip()
                     
-                if query.lower() in ['quit', 'exit', 'q']:
-                    print("👋 Goodbye!")
-                    break
-
-                print("🔄 Processing...")
-                result = await self.process_query(query)
-                print(f"\n📝 Response:\n{result}\n")
-
-            except KeyboardInterrupt:
-                print("\n👋 Goodbye!")
-                break
-            except Exception as e:
-                print(f"❌ Error: {e}\n")
-
-    async def run_single_query(self, query: str) -> str:
-        """Run single query"""
-        if not await self.initialize():
-            return "❌ System initialization failed"
-        return await self.process_query(query)
-
-    async def cleanup(self):
-        """Clean up resources"""
-        if self.mcp_client:
-            await self.mcp_client.close()
+                    if not user_input:
+                        continue
+                    
+                    # Handle system commands
+                    if user_input.lower() in ['quit', 'exit', 'q']:
+                        print("\nGoodbye! MCP workflow session ended.")
+                        break
+                    
+                    elif user_input.lower() in ['help', 'h', '?']:
+                        self.show_help()
+                        continue
+                    
+                    elif user_input.lower() in ['clear', 'cls']:
+                        import os
+                        os.system('cls' if os.name == 'nt' else 'clear')
+                        self.print_banner()
+                        continue
+                    
+                    elif user_input.lower() == 'status':
+                        await self._show_mcp_status()
+                        continue
+                    
+                    # Process query through MCP workflow
+                    print(f"\nProcessing via MCP workflow...")
+                    print("   → Loading MCP tools...")
+                    print("   → LangGraph selecting tool...")
+                    print("   → Calling MCP server...")
+                    print("   → Formatting response...\n")
+                    
+                    response = await process_pdf_query_mcp(user_input)
+                    
+                    # Display response
+                    print("AI Assistant (via MCP Workflow):")
+                    print("─" * 70)
+                    print(response)
+                    print("─" * 70 + "\n")
+                    
+                except KeyboardInterrupt:
+                    print("\nUse 'quit' to exit properly...")
+                    continue
+                except Exception as e:
+                    print(f"\nMCP workflow error: {e}")
+                    print("Try 'help' for available commands\n")
+        
+        finally:
+            await self._cleanup()
+    
+    async def run_single_command(self, query: str):
+        """Run single command through MCP workflow"""
+        print("╔══════════════════════════════════════════════════════════════════════╗")
+        print("║                 PDF MCP CLI - Single Command Mode                    ║") 
+        print("╚══════════════════════════════════════════════════════════════════════╝")
+        print(f"Query: {query}")
+        print("─" * 70)
+        
+        try:
+            print("Executing MCP workflow...")
+            print("   → Connecting to MCP server...")
+            print("   → Loading tools via MCP client...")
+            print("   → LangGraph processing...")
+            
+            if query.strip().lower() == "list all pdfs":
+                print("   → Using list_pdfs_tool directly...")
+            else:
+                print("   → Selecting appropriate tool for query...")
+                
+            print("   → Awaiting response...")
+            print()
+            
+            response = await process_pdf_query_mcp(query)
+            
+            print("Result via MCP Workflow:")
+            print("═" * 70)
+            print(response)
+            print("═" * 70)
+            
+        except Exception as e:
+            print("MCP Workflow Error:")
+            print("═" * 70)
+            print(f"Error: {e}")
+            print("Ensure MCP server is running: python -m pdf_mcp.mcp.server")
+            print("═" * 70)
+        finally:
+            await self._cleanup()
+    
+    async def _show_mcp_status(self):
+        """Show MCP system status"""
+        try:
+            status_response = await process_pdf_query_mcp("Show me the current system and database status")
+            print("\nMCP System Status:")
+            print("─" * 50)
+            print(status_response)
+            print("─" * 50 + "\n")
+        except Exception as e:
+            print(f"Failed to get MCP status: {e}\n")
+    
+    async def _cleanup(self):
+        """Cleanup MCP workflow resources"""
+        try:
+            print("Cleaning up MCP workflow...")
+            await cleanup_pdf_orchestrator()
+            print("Cleanup completed")
+        except Exception as e:
+            logger.warning(f"Cleanup warning: {e}")
 
 async def main():
-    """Main entry point"""
-    cli = PDFAssistantCLI()
+    """Main CLI entry point for MCP workflow"""
+    cli = MCPWorkflowCLI()
     
     try:
-        if len(sys.argv) > 1:
-            # Single query mode
-            query = " ".join(sys.argv[1:])
-            result = await cli.run_single_query(query)
-            print(result)
+        if len(sys.argv) < 2:
+            await cli.run_interactive_session()
         else:
-            # Interactive mode
-            await cli.run_interactive()
-    finally:
-        await cli.cleanup()
+            query = " ".join(sys.argv[1:])
+            await cli.run_single_command(query)
+    
+    except KeyboardInterrupt:
+        print("\nGoodbye!")
+    except Exception as e:
+        print(f"CLI error: {e}")
+        sys.exit(1)
 
 if __name__ == "__main__":
     asyncio.run(main())

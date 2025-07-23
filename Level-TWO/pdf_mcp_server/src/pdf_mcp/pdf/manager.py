@@ -4,7 +4,6 @@ from ..config.settings import settings
 
 class PDFManager:
     def __init__(self):
-        # Ensure directories exist
         settings.pdf_storage_path.mkdir(parents=True, exist_ok=True)
     
     def list_pdfs(self) -> List[Path]:

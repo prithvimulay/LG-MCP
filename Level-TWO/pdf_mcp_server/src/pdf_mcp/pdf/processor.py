@@ -27,7 +27,7 @@ class PDFProcessor:
         
         for i in range(0, text_length, self.chunk_size - self.chunk_overlap):
             chunk = text[i:i + self.chunk_size]
-            if chunk.strip():  # Only add non-empty chunks
+            if chunk.strip():  
                 chunks.append(chunk)
         
         return chunks
@@ -48,17 +48,14 @@ class PDFProcessor:
         """
         pdf_path = Path(pdf_path)
         try:
-            # Extract text
             text = self.extract_text(pdf_path)
             if not text.strip():
                 return {"success": False, "message": f"PDF contains no extractable text: {pdf_path.name}"}
                 
-            # Create chunks
             chunks = self.create_chunks(text)
             if not chunks:
                 return {"success": False, "message": f"Could not create chunks from PDF: {pdf_path.name}"}
                 
-            # Store in vector DB with document metadata
             self.vector_store.add_chunks(chunks, pdf_path.name)
             
             return {

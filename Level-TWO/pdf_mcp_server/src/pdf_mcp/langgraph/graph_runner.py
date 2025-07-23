@@ -13,7 +13,6 @@ async def run_pipeline_async(query: str) -> str:
     if _graph_instance is None:
         logger.info("Initializing LangGraph pipeline")
         
-        # Ensure MCP client is connected
         client = await get_mcp_client()
         await client.connect()
         logger.info("MCP client connected")
@@ -31,7 +30,7 @@ async def run_pipeline_async(query: str) -> str:
     }
 
     try:
-        result = await _graph_instance.ainvoke(initial_state)  # Use ainvoke for async
+        result = await _graph_instance.ainvoke(initial_state)  
         return result.get("final_output", "No response generated")
     except Exception as e:
         logger.error(f"Pipeline error: {e}")

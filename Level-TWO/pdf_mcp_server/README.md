@@ -26,7 +26,6 @@ uv run python -m pdf_mcp.langgraph.graph_runner "Select PDF about artificial int
 ```
 PDF_STORAGE_PATH=./data/pdfs
 VECTOR_DB_PATH=./vector_db
-EMBEDDING_MODEL=all-MiniLM-L6-v2
 CHUNK_SIZE=1000
 CHUNK_OVERLAP=200
 ```

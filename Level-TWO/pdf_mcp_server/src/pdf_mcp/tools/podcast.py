@@ -5,7 +5,6 @@ from pathlib import Path
 processor = PDFProcessor()
 
 def generate_podcast(query: str, pdf_filename: str) -> str:
-    # Use the PDF storage path from settings
     pdf_path = settings.pdf_storage_path / pdf_filename
     
     if not pdf_path.exists():
@@ -14,19 +13,15 @@ def generate_podcast(query: str, pdf_filename: str) -> str:
     try:
         text = processor.extract_text(str(pdf_path))
         
-        # Generate a proper podcast script
         intro = f"🎙️ Welcome to this AI-powered podcast about '{query}'!\n\n"
         
-        # Extract meaningful content from the PDF
         lines = [line.strip() for line in text.splitlines() if line.strip() and len(line.strip()) > 20]
         
-        # Create a dialogue format
         dialogue = []
         dialogue.append(f"Host: Today we're discussing '{query}' based on insights from {pdf_filename}.")
         dialogue.append(f"Expert: That's right! Let me share some key points from this document.")
         
-        # Add content from the PDF
-        for i, line in enumerate(lines[:10]):  # Limit to first 10 meaningful lines
+        for i, line in enumerate(lines[:10]):  
             if i % 2 == 0:
                 dialogue.append(f"Expert: {line[:200]}...")
             else:
