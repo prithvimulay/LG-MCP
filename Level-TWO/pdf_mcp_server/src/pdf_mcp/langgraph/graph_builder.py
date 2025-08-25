@@ -3,10 +3,33 @@ from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from pdf_mcp.config.settings import settings
 from pdf_mcp.mcp.mcp_client import get_mcp_client
+from langsmith import traceable
+import os
 import logging
 import asyncio
 
 logger = logging.getLogger(__name__)
+
+# Initialize LangSmith if enabled
+def _setup_langsmith():
+    """Setup LangSmith tracing if enabled in settings"""
+    if settings.langsmith_tracing and settings.langsmith_api_key:
+        os.environ["LANGCHAIN_TRACING_V2"] = "true"
+        os.environ["LANGCHAIN_ENDPOINT"] = settings.langsmith_endpoint
+        os.environ["LANGCHAIN_API_KEY"] = settings.langsmith_api_key
+        os.environ["LANGCHAIN_PROJECT"] = settings.langsmith_project
+        
+        logger.info(f"LangSmith tracing enabled for project: {settings.langsmith_project}")
+        
+        # LangSmith environment setup is sufficient for tracing
+        logger.info("LangSmith environment variables configured successfully")
+        return True
+    else:
+        logger.info("LangSmith tracing is disabled")
+        return None
+
+# Initialize LangSmith on module import
+langsmith_client = _setup_langsmith()
 
 class LangGraphPDFOrchestrator:
     """LangGraph orchestrator with robust MCP tool integration and strict tool usage."""
@@ -51,6 +74,7 @@ class LangGraphPDFOrchestrator:
     def _build_langgraph(self):
         llm_with_tools = self.llm.bind_tools(self.tools_list)
 
+        @traceable(name="pdf_agent_node")
         async def agent_node(state: MessagesState):
             messages = state["messages"]
             system_msg = SystemMessage(content=(
@@ -65,7 +89,7 @@ class LangGraphPDFOrchestrator:
                 "DO NOT call multiple tools or attempt to chain them together.\n"
                 "If a query like 'List all PDFs' comes in, just call list_pdfs_tool with no arguments.\n"
             ))
-            if not messages or not isinstance(messages[0], SystemMessage):
+            if not messages or not isinstance(messages[0], SystemMessage): 
                 messages = [system_msg] + messages
             response = await llm_with_tools.ainvoke(messages)
             logger.info(
@@ -73,6 +97,7 @@ class LangGraphPDFOrchestrator:
             )
             return {"messages": [response]}
 
+        @traceable
         async def mcp_tool_node(state: MessagesState):
             messages = state["messages"]
             last_message = messages[-1]
@@ -135,6 +160,7 @@ class LangGraphPDFOrchestrator:
         builder.add_edge("tools", "agent")
         return builder.compile()
 
+    @traceable(name="pdf_process_query")
     async def process_query(self, query: str) -> str:
         try:
             if not self._initialized:
@@ -164,7 +190,9 @@ class LangGraphPDFOrchestrator:
 
 _pdf_orchestrator = LangGraphPDFOrchestrator()
 
+@traceable(name="pdf_mcp_main_entry")
 async def process_pdf_query_mcp(query: str) -> str:
+    """Main entry point for PDF query processing with LangSmith tracing"""
     return await _pdf_orchestrator.process_query(query)
 
 async def cleanup_pdf_orchestrator():

@@ -92,15 +92,72 @@ def register_tools(server: FastMCP):
         query: Annotated[str, Field(description="Topic for podcast generation")],
         pdf_filename: Annotated[str, Field(description="PDF file to base content on")]
     ) -> str:
-        """Generates a podcast-style dialogue based on PDF content."""
+        """Generates a podcast-style dialogue based on PDF content (text only)."""
         try:
-            result = generate_podcast(query, pdf_filename)
-            if not result or len(result) < 50:
-                return f"Unable to generate sufficient podcast content for '{query}' from {pdf_filename}"
-            return result
+            result = generate_podcast(query, pdf_filename, generate_audio=False)
+            if not result.get("success") or not result.get("script"):
+                error_msg = result.get("error", "Unknown error")
+                return f"Unable to generate podcast content for '{query}' from {pdf_filename}: {error_msg}"
+            
+            # Format response with metadata
+            response = f"=== Podcast Script: {query} ===\n\n"
+            response += f"Source: {pdf_filename}\n"
+            response += f"Format: {result.get('speaker_format', 'S1 (Host), S2 (Expert)')}\n"
+            response += f"Generated: {result.get('generated_at', 'Unknown')}\n\n"
+            response += result['script']
+            
+            return response
         except Exception as e:
             logger.error(f"Podcast generation failed: {e}")
             raise RuntimeError(f"Podcast generation failed: {str(e)}")
+
+    @server.tool()
+    def generate_audio_podcast_tool(
+        query: Annotated[str, Field(description="Topic for audio podcast generation")],
+        pdf_filename: Annotated[str, Field(description="PDF file to base content on")]
+    ) -> str:
+        """Generates a podcast-style dialogue with audio using Nari Labs Dia TTS."""
+        try:
+            result = generate_podcast(query, pdf_filename, generate_audio=True)
+            
+            if not result.get("success"):
+                error_msg = result.get("error", "Unknown error")
+                return f"Unable to generate podcast for '{query}' from {pdf_filename}: {error_msg}"
+            
+            # Format response with complete information
+            response = f"=== Audio Podcast Generated: {query} ===\n\n"
+            response += f"Source PDF: {pdf_filename}\n"
+            response += f"Speaker Format: {result.get('speaker_format', 'S1 (Host), S2 (Expert)')}\n"
+            response += f"Generated: {result.get('generated_at', 'Unknown')}\n\n"
+            
+            # Audio generation results
+            if result.get("audio_generated"):
+                response += f"🎵 AUDIO GENERATED SUCCESSFULLY\n"
+                response += f"Audio File: {result.get('audio_path', 'Unknown')}\n"
+                response += f"Estimated Duration: ~{result.get('audio_duration_estimate', 'Unknown')} seconds\n"
+                
+                if result.get('generation_params'):
+                    params = result['generation_params']
+                    response += f"Generation Parameters:\n"
+                    response += f"  - Temperature: {params.get('temperature')}\n"
+                    response += f"  - Guidance Scale: {params.get('guidance_scale')}\n"
+                    response += f"  - Top-p: {params.get('top_p')}\n"
+                    response += f"  - Top-k: {params.get('top_k')}\n"
+                
+            else:
+                response += f"⚠️ AUDIO GENERATION FAILED\n"
+                audio_error = result.get('audio_error', 'Unknown error')
+                response += f"Error: {audio_error}\n"
+                response += f"Text script was generated successfully (see below)\n"
+            
+            response += f"\n=== PODCAST SCRIPT ===\n"
+            response += result.get('script', 'Script not available')
+            
+            return response
+            
+        except Exception as e:
+            logger.error(f"Audio podcast generation failed: {e}")
+            raise RuntimeError(f"Audio podcast generation failed: {str(e)}")
 
     @server.tool()
     def select_relevant_pdf_tool(
